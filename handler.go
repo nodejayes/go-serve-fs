@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+type Config struct {
+	UseClientSideRouter bool
+	MainPath string
+}
+
 func getMimeType(ext string) string {
 	switch ext {
 	case ".aac":
@@ -165,7 +170,7 @@ func detectMainFolderName(fileSystem embed.FS) string {
 	return ""
 }
 
-func ConnectFS(fileSystem embed.FS) http.HandlerFunc {
+func ConnectFS(fileSystem embed.FS, config *Config) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
 		ext := path.Ext(req.URL.Path)
 		requestPath := req.URL.Path
@@ -176,6 +181,20 @@ func ConnectFS(fileSystem embed.FS) http.HandlerFunc {
 		filePath := fmt.Sprintf("%s%s", detectMainFolderName(fileSystem), requestPath)
 		content, err := fileSystem.ReadFile(filePath)
 		if err != nil {
+			if config.UseClientSideRouter {
+				ext = ".html"
+				filePath := fmt.Sprintf("%s%s", detectMainFolderName(fileSystem), config.MainPath)
+				content, err := fileSystem.ReadFile(filePath)
+				if err != nil {
+					res.WriteHeader(http.StatusNotFound)
+					res.Write([]byte{})
+					return
+				}
+				res.Header().Set("Content-Type", getMimeType(ext))
+				res.WriteHeader(http.StatusOK)
+				res.Write(content)
+				return
+			}
 			res.WriteHeader(http.StatusNotFound)
 			res.Write([]byte{})
 			return
